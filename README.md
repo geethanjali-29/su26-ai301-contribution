@@ -114,8 +114,7 @@ Existing tests in `documentdb_tests/compatibility/tests/core/operator/expression
 6. Mark test with `@pytest.mark.smoke` consistent with neighboring tests
 
 **Implement:**
-Branch: https://github.com/geethanjalinagaboina/functional-tests/tree/fix-issue-208
-
+Branch:  https://github.com/geethanjali-29/functional-tests/tree/fix-issue-208
 **Review:**
 - Matches existing test structure and naming conventions in `misc/`
 - Uses only framework-provided utilities (`execute_command`, `assertSuccess`) — no new dependencies
