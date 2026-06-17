@@ -90,7 +90,7 @@ No test file existed for `$sampleRate`. Running `find ~/functional-tests -name "
 
 ### Reproduction Evidence
 
-- **Branch:** https://github.com/geethanjalinagaboina/functional-tests/tree/fix-issue-208
+- **Branch:** https://github.com/geethanjali-29/functional-tests/tree/fix-issue-208
 - **Issue confirmed:** Running `--collect-only` shows 29,932 tests with zero results when filtering for `sampleRate`, confirming the gap in coverage
 
 ---
