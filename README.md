@@ -4,7 +4,7 @@
 **Contribution Number:** 1
 **Student:** Geethanjali Nagaboina
 **Issue:** https://github.com/documentdb/functional-tests/issues/208
-**Status:** Phase II Complete
+**Status:** Phase III Complete
 
 ---
 
@@ -42,7 +42,7 @@ No test file existed for `$sampleRate`. Running `find ~/functional-tests -name "
 
 - **Missing file:** `documentdb_tests/compatibility/tests/core/operator/expressions/misc/sampleRate/test_smoke_sampleRate.py` — new directory and test file added here
 - **Reference pattern:** `documentdb_tests/compatibility/tests/core/operator/expressions/misc/rand/test_smoke_rand.py` — used as the direct structural template
-- **Framework utilities used:** `execute_command` and `assertSuccess` from `documentdb_tests/compatibility/` test framework
+- **Framework utilities used:** `assertSuccess` from `documentdb_tests.framework.assertions` and `execute_command` from `documentdb_tests.framework.executor`
 - **Config files consulted:** `documentdb_tests/conftest.py` and `documentdb_tests/pytest.ini` — required to understand how custom CLI flags (`--connection-string`, `--engine-name`) are registered
 
 ---
@@ -108,17 +108,19 @@ Existing tests in `documentdb_tests/compatibility/tests/core/operator/expression
 **Plan:**
 1. Create directory: `documentdb_tests/compatibility/tests/core/operator/expressions/misc/sampleRate/`
 2. Create file: `test_smoke_sampleRate.py` modeled on `test_smoke_rand.py`
-3. Insert 3 known documents into the test collection using `execute_command`
+3. Insert 3 known documents into the test collection using `collection.insert_many()`
 4. Run `{ $match: { $sampleRate: 1.0 } }` — at rate 1.0, all documents must be returned (deterministic)
-5. Assert the result matches all 3 inserted documents using `assertSuccess`
-6. Mark test with `@pytest.mark.smoke` consistent with neighboring tests
+5. Run `{ $match: { $sampleRate: 0.0 } }` — at rate 0.0, no documents must be returned (deterministic)
+6. Assert results using `assertSuccess` — no plain `assert` allowed by project validator
+7. Mark tests with `pytestmark = pytest.mark.smoke` consistent with neighboring tests
 
 **Implement:**
-Branch: https://github.com/geethanjali-29/functional-tests/tree/fix-issue-208 (Try to copy paste the url sometimes the link is Throwing 404 error)
+Branch: https://github.com/geethanjali-29/functional-tests/tree/fix-issue-208
+
 **Review:**
 - Matches existing test structure and naming conventions in `misc/`
-- Uses only framework-provided utilities (`execute_command`, `assertSuccess`) — no new dependencies
-- Marked `@pytest.mark.smoke` per project convention
+- Uses only framework-provided utilities (`assertSuccess`, `execute_command`) — no new dependencies
+- Uses `pytestmark = pytest.mark.smoke` per project convention
 - Does not modify any engine or framework code — purely additive
 
 **Evaluate:**
@@ -128,7 +130,51 @@ cd documentdb_tests
 pytest --connection-string mongodb://localhost:27017 --engine-name mongodb \
   compatibility/tests/core/operator/expressions/misc/sampleRate/test_smoke_sampleRate.py -v
 ```
-**Result: 1 passed in 0.47s ✅**
+**Result: 2 passed in 0.59s ✅**
+
+---
+
+## Implementation Notes
+
+### What Was Built (Phase III)
+
+The final test file lives at:
+```
+documentdb_tests/compatibility/tests/core/operator/expressions/misc/sampleRate/test_smoke_sampleRate.py
+```
+
+It contains **2 test cases** covering the deterministic boundary values of `$sampleRate`:
+
+| Test function | What it validates |
+|---|---|
+| `test_smoke_sampleRate_rate_one` | `$sampleRate: 1.0` returns all inserted documents (deterministic upper boundary) |
+| `test_smoke_sampleRate_rate_zero` | `$sampleRate: 0.0` returns no documents (deterministic lower boundary) |
+
+**Key decisions and discoveries made during Phase III:**
+
+1. **Correct import paths.** Initial imports used `from documentdb_tests.compatibility import assertSuccess, execute_command` which failed. Inspecting `test_smoke_rand.py` revealed the correct paths: `from documentdb_tests.framework.assertions import assertSuccess` and `from documentdb_tests.framework.executor import execute_command`.
+
+2. **Project enforces `assertSuccess()` — no plain `assert` allowed.** The project has a built-in validator that blocks any test using plain Python `assert`. All assertions must go through `assertSuccess(result, expected, msg=...)`, `assertFailure()`, or `assertResult()`. This was discovered at runtime and required rewriting the tests to pass expected documents directly into the framework function.
+
+3. **`collection` fixture, not `fixture_collection`.** The rand template uses `collection` as the pytest fixture parameter name. Using a different name causes pytest to not inject the fixture correctly.
+
+4. **`collection.insert_many()` for inserts.** The rand template uses the pymongo collection directly for inserts rather than wrapping them in `execute_command`. Matching this pattern keeps tests consistent with the rest of the suite.
+
+5. **Dropped mid-range probabilistic tests.** Originally planned a `rate=0.5` subset validity test, but without plain `assert` it cannot be expressed cleanly using only `assertSuccess` (which requires exact expected output). The two deterministic boundary tests fully satisfy the issue requirements.
+
+### Files Changed
+
+```
+documentdb_tests/
+└── compatibility/
+    └── tests/
+        └── core/
+            └── operator/
+                └── expressions/
+                    └── misc/
+                        └── sampleRate/                      ← new directory
+                            └── test_smoke_sampleRate.py     ← new file (2 tests)
+```
 
 ---
 
@@ -136,27 +182,43 @@ pytest --connection-string mongodb://localhost:27017 --engine-name mongodb \
 
 ### What Was Tested
 
-- **Rate = 1.0 (all documents):** With `$sampleRate: 1.0`, all 3 inserted documents must be returned. This is deterministic and confirms basic operator functionality.
-- **Operator placement:** Confirmed `$sampleRate` is used inside a `$match` stage (not `$project`) — it is a match expression, not a projection expression.
-- **Framework integration:** `execute_command` and `assertSuccess` correctly handle the aggregation result format.
+**`rate=1.0` (deterministic upper boundary):**
+With `$sampleRate: 1.0`, every document in the collection is guaranteed to be returned by the MongoDB spec. Inserting 3 known documents and asserting all 3 are returned confirms basic operator functionality without any reliance on random behavior.
 
-### Manual Testing
+**`rate=0.0` (deterministic lower boundary):**
+With `$sampleRate: 0.0`, no document is ever included. Asserting an empty result confirms the operator correctly handles the lower boundary.
 
-Ran the full test file in isolation against a local MongoDB 7.x instance. Output:
+These two cases are the only fully deterministic ways to test a probabilistic operator — they test guaranteed spec behavior rather than statistical outcomes.
 
+### Manual Test Run
+
+```bash
+cd documentdb_tests
+pytest --connection-string mongodb://localhost:27017 --engine-name mongodb \
+  compatibility/tests/core/operator/expressions/misc/sampleRate/test_smoke_sampleRate.py -v
 ```
-compatibility/tests/core/operator/expressions/misc/sampleRate/test_smoke_sampleRate.py::test_smoke_sampleRate PASSED
-1 passed in 0.47s
+
+Output:
 ```
+test_smoke_sampleRate_rate_one PASSED   [ 50%]
+test_smoke_sampleRate_rate_zero PASSED  [100%]
+
+2 passed in 0.59s
+```
+
+### What Is NOT Tested (and Why)
+
+- **Mid-range rates (e.g. 0.5):** Cannot be tested deterministically. The project's validator blocks plain `assert`, and `assertSuccess` requires exact expected output — incompatible with probabilistic results. This would belong in a separate statistical test with retry logic, out of scope for a smoke test.
+- **Invalid rate values (e.g. -0.1, 1.5):** Error-path behavior belongs in a separate `test_error_sampleRate.py` file, consistent with how `test_rand_argument_handling.py` is structured alongside `test_smoke_rand.py`.
 
 ---
 
-## Implementation Notes
+## Code Changes
 
-- pytest must always be invoked from `documentdb_tests/`, not the repo root — `conftest.py` and `pytest.ini` are not at root
-- When running the full suite, add `--ignore=compatibility/result_analyzer/test_analyzer.py` to avoid an unregistered `unit` marker error
-- `$sampleRate` is a **match expression**, not a projection operator — it must appear inside `{ $match: { $sampleRate: <rate> } }`
-- Testing probabilistic operators deterministically requires using the guaranteed boundary values: `0.0` (no documents) and `1.0` (all documents)
+- **Active branch:** https://github.com/geethanjali-29/functional-tests/tree/fix-issue-208
+- **Commit:** https://github.com/geethanjali-29/functional-tests/commit/61b13b7
+- **New file:** `documentdb_tests/compatibility/tests/core/operator/expressions/misc/sampleRate/test_smoke_sampleRate.py`
+- **Draft PR:** [To be opened in Phase IV]
 
 ---
 
@@ -177,3 +239,4 @@ compatibility/tests/core/operator/expressions/misc/sampleRate/test_smoke_sampleR
 - https://github.com/documentdb/functional-tests/issues/208
 - https://www.mongodb.com/docs/manual/reference/operator/aggregation/sampleRate/
 - https://github.com/documentdb/functional-tests/blob/main/README.md
+- `misc/rand/test_smoke_rand.py` — structural template for probabilistic operator tests
