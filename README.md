@@ -4,7 +4,7 @@
 **Contribution Number:** 1
 **Student:** Geethanjali Nagaboina
 **Issue:** https://github.com/documentdb/functional-tests/issues/208
-**Status:** Phase III Complete
+**Status:** Phase IV Complete/ Awaiting review
 
 ---
 
@@ -224,9 +224,15 @@ test_smoke_sampleRate_rate_zero PASSED  [100%]
 
 ## Pull Request
 
-[To be completed in Phase IV]
-
----
+- **PR Link:** https://github.com/documentdb/functional-tests/pull/652
+- **PR Description:** Added two smoke tests for the `$sampleRate` aggregation 
+  operator covering the deterministic boundary values (`rate=1.0` returns all 
+  documents, `rate=0.0` returns none), closing a gap confirmed across 29,932 
+  collected tests with zero prior coverage for this operator.
+- **Maintainer Feedback:** Awaiting first review. `documentdb/functional-tests-maintainers` 
+  was automatically requested for review via CODEOWNERS. DCO sign-off was added 
+  post-submission after the check failed on the initial push.
+- **Status:** Awaiting Review
 
 ## Learnings & Reflections
 
