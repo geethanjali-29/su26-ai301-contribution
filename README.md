@@ -8,6 +8,16 @@
 
 ---
 
+## Week 5 Update
+
+PR #652 is open and awaiting maintainer review — `documentdb/functional-tests-maintainers`
+was auto-assigned via CODEOWNERS, and no feedback has come in yet. While waiting, I'm
+reviewing the open issues list for a second beginner-friendly issue to start on in parallel,
+prioritizing ones in the same `misc/` operator directory family so I can reuse what I
+learned about the test framework's conventions (fixture naming, `assertSuccess`-only
+assertions, `pytestmark` usage).
+
+---
 ## Why I Chose This Issue
 
 I chose this issue because it is well-scoped and beginner-friendly, making it a great fit for my first open source contribution. The task asks me to write a compatibility test for the `$sampleRate` aggregation operator in DocumentDB — something I can accomplish entirely in Python using pytest, which I'm already familiar with. There's no need to modify engine code or work in an unfamiliar language, so I can focus on learning the contribution workflow itself.
