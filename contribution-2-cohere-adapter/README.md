@@ -3,7 +3,7 @@
 **Contribution Number:** 2
 **Student:** Geethanjali Nagaboina
 **Issue:** https://github.com/orthogonalhq/nous-core/issues/313
-**Status:** Phase II Complete — Assigned by maintainer
+**Status:** Phase III Complete — Assigned by maintainer
 
 ---
 
@@ -158,13 +158,68 @@ Re-run the focused test suite used for the baseline above — expect the same 54
 
 ## Testing Strategy
 
-_To be completed in Phase III._
+**Full test suite result after adding the Cohere leaf:**
+```bash
+pnpm --filter @nous/subcortex-providers exec vitest run --config vitest.config.ts
+```
+Result: **524 passed, 2 failed, 4 skipped** (530 total). The 2 failures are the same pre-existing, unrelated failures documented in Phase II's baseline (`vllm`/`qwen-code` filesystem ordering, and a Mistral env-var stubbing issue) — confirmed unaffected by this change.
+
+**What was tested:**
+- `pnpm --filter @nous/subcortex-providers run typecheck` — clean pass after regenerating catalogs and fixing hardcoded vendor-key fixtures.
+- `check:generated` — confirms `provider-definitions.ts`, `provider-adapters.ts`, and `provider-factories.ts` stay in sync with the leaf via `generate:providers`.
+- Full vitest suite, including `provider-pipeline-integration.test.ts`'s registry construction test, which now successfully constructs and registers a `CohereProvider` instance end-to-end alongside all other vendors.
+
+**What is not yet tested (left for Phase IV polish):**
+- No dedicated `cohere-provider.test.ts` or `adapters/cohere-adapter.test.ts` unit tests yet, unlike `anthropic-provider.test.ts` / `adapters/anthropic-adapter.test.ts`. Existing shared fixtures (`provider-pipeline-integration.test.ts`'s adapter-parsing table) do exercise the adapter's `parseResponse` at a basic level, but dedicated tests for `formatRequest`, tool-call round-tripping, and streaming SSE parsing should be added before opening the PR.
+- Live/manual verification against the real Cohere API (no `COHERE_API_KEY` used yet) — the leaf has only been exercised against mocked fixtures.
 
 ---
 
 ## Implementation Notes
 
-_To be completed in Phase III._
+**What was built:** A complete Cohere provider leaf at `self/subcortex/providers/src/providers/cohere/` (`definition.ts`, `adapter.ts`, `provider.ts`, `implementation.ts`, `index.ts`), modeled structurally on the Anthropic leaf but adapted for Cohere's v2 Chat API (`POST /v2/chat`, `Authorization: Bearer` auth, native tool-calling via `tool_calls`, SSE streaming with `content-delta`/`message-end` event types).
+
+**Key decisions:**
+1. **`protocol: 'cohere-chat'` and `adapterKey: 'cohere'`** use the schema's `(string & {})` escape hatch rather than requiring an enum change, matching how other non-`chat-completions` protocols are declared.
+2. **`capabilities.cacheControl` and `extendedThinking` are both `false`** — Cohere's Chat API has no equivalent to Anthropic's cache-control segments or extended-thinking blocks, so these were left honestly `false` rather than approximated.
+3. **`modelListing: false`** — while Cohere does expose a models endpoint, I didn't confirm its response shape matches either `anthropic-models` or `openai-models` (the only two formats the schema's `ProviderModelListFormatSchema` currently supports), so I left model listing unimplemented rather than declaring an unverified format.
+4. **Registered `COHERE_API_KEY` test fixture consistently** across `provider-pipeline-integration.test.ts` so the registry-construction integration test builds a real `CohereProvider` instance the same way it does for every other vendor.
+
+**Challenges encountered and how I resolved them:**
+1. **Hardcoded vendor-key arrays in test fixtures.** Several tests (`provider-codegen.test.ts`, `provider-definitions.test.ts`, `provider-pipeline-integration.test.ts`, `adapter-resolver.test.ts`) hardcode the full list of vendor keys as an explicit array/union type rather than deriving it dynamically. Adding a new leaf requires updating each of these — a good adjacent-issue candidate to file upstream (dynamic derivation would prevent this class of edit entirely).
+2. **A metadata-only definitions test reads provider source files by hardcoded relative path** (`provider-definitions.test.ts`'s `providerFiles` array), matched against the pattern `_PROVIDER_DEFINITION = {`. I initially guessed the wrong file for a sibling entry while doing a bulk find/replace and had to trace it back via `grep` on the actual export locations (`definition.ts` vs `implementation.ts` differ per provider depending on where each defines its named constant).
+3. **A broad `sed` find/replace edited more than intended**, inserting a stray line into an unrelated test fixture object because the matched text pattern wasn't unique enough. Fixed by using more context-specific multi-line matches (`perl -0777` with surrounding-line anchors) for subsequent edits.
+
+### Files Changed
+```
+self/subcortex/providers/
+└── src/
+    ├── providers/
+    │   └── cohere/                          ← new leaf
+    │       ├── adapter.ts
+    │       ├── definition.ts
+    │       ├── implementation.ts
+    │       ├── index.ts
+    │       └── provider.ts
+    ├── index.ts                             ← added CohereProvider export
+    ├── provider-definitions.ts               ← regenerated
+    ├── provider-adapters.ts                  ← regenerated
+    ├── provider-factories.ts                 ← regenerated
+    └── __tests__/
+        ├── provider-definitions/
+        │   ├── provider-definition-types.test.ts   ← added 'cohere' to vendor-key unions
+        │   └── provider-definitions.test.ts        ← added cohere roster entry + expectedDefinitions + file-list entry
+        ├── provider-pipeline-integration.test.ts   ← added 'cohere', COHERE_API_KEY fixture, CohereProvider import/map entry
+        └── adapter-resolver.test.ts                ← added 'cohere' to adapter module order
+```
+
+### Code Changes
+- **Branch:** https://github.com/geethanjali-29/nous-core/tree/fix-issue-313
+- **Base branch:** `feat/contributor-friendly-inference-provider-surface` (per issue's 2026-06-18 scope update)
+- **Key commits:**
+  - `feat(providers): add Cohere provider leaf` — the 5 new leaf files + regenerated catalogs + initial test fixture updates
+  - `test(providers): register cohere in vendor-key fixtures and definition-file roster` — follow-up fixture corrections
+- **Test result:** 524 passed / 2 pre-existing unrelated failures / 4 skipped (530 total)
 
 ---
 
